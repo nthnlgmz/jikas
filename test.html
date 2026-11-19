@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated GCash Pay</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root { --gcash-blue: #007bff; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
+        .header { color: var(--gcash-blue); font-weight: 800; margin-bottom: 5px; }
+        .sub-text { color: #666; font-size: 0.85rem; margin-bottom: 2rem; }
+        
+        .amount-container {
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        .amount-container span {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: bold;
+            color: #333;
+        }
+        input#amount {
+            width: 100%;
+            padding: 15px 15px 15px 45px;
+            font-size: 1.5rem;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input#amount:focus { border-color: var(--gcash-blue); }
+
+        #qrcode {
+            background: #fff;
+            padding: 10px;
+            display: inline-block;
+            border: 1px solid #eee;
+            border-radius: 10px;
+        }
+        .footer-info {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: #444;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="header">GCash QuickPay</div>
+    <div class="sub-text">Enter amount to generate QR</div>
+
+    <div class="amount-container">
+        <span>₱</span>
+        <input type="number" id="amount" placeholder="0.00" autofocus>
+    </div>
+
+    <div id="qrcode"></div>
+
+    <div class="footer-info" id="displayName">NA******L G.</div>
+</div>
+
+<script>
+    // YOUR FIXED DEFAULTS
+    const CONFIG = {
+        userId: "DWQM4TK3JDNXHVH3U",
+        name: "NA******L G.",
+        location: "Pulong Balibag",
+        postal: "1234"
+    };
+
+    const amtInput = document.getElementById('amount');
+    const qrContainer = document.getElementById('qrcode');
+    const qrcode = new QRCode(qrContainer, { width: 200, height: 200 });
+
+    function crc16(data) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < data.length; i++) {
+            crc ^= data.charCodeAt(i) << 8;
+            for (let j = 0; j < 8; j++) {
+                if (crc & 0x8000) crc = (crc << 1) ^ 0x1021;
+                else crc = crc << 1;
+            }
+        }
+        return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function emv(tag, value) {
+        return tag + value.length.toString().padStart(2, '0') + value;
+    }
+
+    function updateQR() {
+        const amount = amtInput.value;
+
+        // Construct Tag 27 (Merchant Info)
+        const subTags = 
+            emv('00', 'com.p2pqrpay') +
+            emv('01', 'GXCHPHM2XXX') +
+            emv('02', '99964403') +
+            emv('03', '217020000000656') +
+            emv('04', CONFIG.userId);
+        
+        let payload = emv('00', '01'); 
+        payload += emv('01', amount ? '12' : '11'); 
+        payload += emv('27', subTags);
+        payload += emv('52', '6016');
+        payload += emv('53', '608');
+        
+        if (amount && amount > 0) {
+            payload += emv('54', parseFloat(amount).toFixed(2));
+        }
+
+        payload += emv('58', 'PH');
+        payload += emv('59', CONFIG.name);
+        payload += emv('60', CONFIG.location);
+        payload += emv('61', CONFIG.postal);
+        payload += '6304';
+        
+        const finalPayload = payload + crc16(payload);
+        qrcode.makeCode(finalPayload);
+    }
+
+    // Auto-update on every keystroke
+    amtInput.addEventListener('input', updateQR);
+
+    // Initial state
+    updateQR();
+</script>
+
+</body>
+</html>
